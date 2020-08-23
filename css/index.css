@@ -88,6 +88,9 @@ td, th{
   stroke: black;
 }
 
+g.Counties path {
+  stroke: #eee;
+}
 g.SchoolName path {
   stroke: #870d17;
 }

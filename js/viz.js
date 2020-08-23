@@ -13,6 +13,9 @@ var districtShapes;
     table: dc.dataTable('#districts')
   };
 
+  d3.json('./data/common/counties.simple2.topo.json')
+    .then(init);
+
   d3.json('./data/2018/districts.simple2.topo.json')
     .then(function (shapes) {
       districtShapes = shapes;
@@ -79,8 +82,21 @@ var districtShapes;
     return res;
   }
 
+  var ndx = crossfilter();
+
   function render(schools, districts) {
-    var ndx = crossfilter(schools);
+    var geojson = topojson.feature(districts, districts.objects.IowaSchoolDistrictsFY18);
+    charts.map
+      .overlayGeoJson(geojson.features, 'SchoolName', function (d) {
+        return d.properties.COUNTY || d.properties.SchoolName.replace(/([ -]) +/g, '$1').toUpperCase();
+      });
+
+    ndx.add(schools);
+
+    dc.renderAll();
+  }
+
+  function init(counties) {
     dims = {
       districtMap: ndx.dimension(dc.pluck('district')),
       district: ndx.dimension(dc.pluck('district')),
@@ -159,7 +175,7 @@ var districtShapes;
       .externalRadiusPadding(10)
     ;
 
-    var geojson = topojson.feature(districts, districts.objects.IowaSchoolDistrictsFY18);
+    var geojson = topojson.feature(counties, counties.objects.county);
     var projection = d3.geoAlbersUsa()
       .fitSize([990,500], geojson);
 
@@ -168,10 +184,10 @@ var districtShapes;
       .dimension(dims.districtMap)
       .group(groups.districtMap)
       .colorCalculator(function (d) {
-        return d ? districtColor(d.count, d.responses, d.cs) : '#ccc';
+        return d ? districtColor(d.count, d.responses, d.cs) : '#fff';
       })
-      .overlayGeoJson(geojson.features, 'SchoolName', function (d) {
-        return d.properties.SchoolName.replace(/([ -]) +/g, '$1').toUpperCase();
+      .overlayGeoJson(geojson.features, 'Counties', function (d) {
+        return d.properties.COUNTY;
       })
       .projection(projection)
       .valueAccessor(function(kv) {
