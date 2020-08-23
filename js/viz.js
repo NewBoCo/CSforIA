@@ -1,11 +1,11 @@
-/* globals d3, crossfilter, dc, topojson */
+/* globals page, d3, crossfilter, dc, topojson */
 
 var dims;
 var groups;
 var schoolData;
 var districtShapes;
 
-(function(d3, crossfilter, dc, topojson) {
+(function(page, d3, crossfilter, dc, topojson) {
   var charts = {
     gradeBands: dc.rowChart('#gradeBands'),
     csResponses: dc.pieChart('#csResponses'),
@@ -249,4 +249,8 @@ var districtShapes;
 
     dc.renderAll();
   }
-})(d3, crossfilter, dc, topojson);
+
+  page({
+    hashbang: true
+  });
+})(page, d3, crossfilter, dc, topojson);
