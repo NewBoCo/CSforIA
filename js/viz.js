@@ -84,8 +84,8 @@ var groups;
   function render(schools, districts) {
     var geojson = topojson.feature(districts, districts.objects.IowaSchoolDistrictsFY18);
     charts.map
-      .overlayGeoJson(geojson.features, 'SchoolName', function (d) {
-        return d.properties.COUNTY || d.properties.SchoolName.replace(/([ -]) +/g, '$1').toUpperCase();
+      .overlayGeoJson(geojson.features, 'Districts', function (d) {
+        return d.properties.COUNTY || d.properties.DistrictNa.replace(/([ -]) +/g, '$1').toUpperCase();
       });
 
     ndx.add(schools);

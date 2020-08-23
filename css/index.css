@@ -91,14 +91,14 @@ td, th{
 g.Counties path {
   stroke: #eee;
 }
-g.SchoolName path {
+g.Districts path {
   stroke: #870d17;
 }
-g.SchoolName.selected path {
+g.Districts.selected path {
   stroke: #870d17;
   stroke-width: 2px;
 }
-g.SchoolName.deselected path {
+g.Districts.deselected path {
   stroke: #870d17;
   fill: white;
 }
