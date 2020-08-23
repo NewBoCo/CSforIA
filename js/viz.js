@@ -2,8 +2,6 @@
 
 var dims;
 var groups;
-var schoolData;
-var districtShapes;
 
 (function(page, d3, crossfilter, dc, topojson) {
   var charts = {
@@ -16,57 +14,56 @@ var districtShapes;
   d3.json('./data/common/counties.simple2.topo.json')
     .then(init);
 
-  d3.json('./data/2018/districts.simple2.topo.json')
-    .then(function (shapes) {
-      districtShapes = shapes;
-      if (schoolData) render(schoolData, districtShapes);
+  function load() {
+    return Promise.all([
+      d3.json('./data/2018/districts.simple2.topo.json'),
+      d3.csv('./data/2018/gradeLevelData.csv', function (school) {
+        var gradeBands = [];
+
+        if (school['Stage El'] === '1')
+          gradeBands.push('Elementary');
+        if (school['Stage Mi'] === '1')
+          gradeBands.push('Middle');
+        if (school['Stage Hi'] === '1')
+          gradeBands.push('High');
+
+        if (!gradeBands.length || !+school.Students)
+          return;
+
+        function normalizeDistrict(district){
+          switch (district) {
+            case 'A-H-S-T COMM SCHOOL DISTRICT':
+            case 'WALNUT COMM SCHOOL DISTRICT':
+              return 'AHSTW COMM SCHOOL DISTRICT';
+            case 'COLO-NESCO SCHOOL COMM SCHOOL DISTRICT':
+              return 'COLO-NESCO COMM SCHOOL DISTRICT';
+            case 'EDDYVILLE-BLAKESBURG- FREMONT CSD':
+              return 'EDDYVILLE-BLAKESBURG-FREMONT CSD';
+            case 'ELK HORN-KIMBALLTON COMM SCHOOL DISTRICT':
+            case 'EXIRA-ELK HORN-KIMBALLTON COMM SCHOOL DISTRICT':
+              return 'EXIRA-ELK HORN-KIMBALLTON COMM SCH DIST';
+            case 'GARNER-HAYFIELD COMM SCHOOL DISTRICT':
+            case 'VENTURA COMM SCHOOL DISTRICT':
+              return 'GARNER-HAYFIELD-VENTURA COMM SCHOOL DISTRICT';
+            case 'SOUTH TAMA COUNTY COMM SCHOOL DISTRICT':
+              return 'SOUTH TAMA COUNTY';
+            default:
+              return district;
+          }
+        }
+
+        return {
+          district: normalizeDistrict(school['School District Name']),
+          school: school['School Name'],
+          population: +school.Students,
+          gradeBands: gradeBands,
+          csResponse: school['Teaches CS?'] || 'Unknown',
+        };
+      }),
+    ]).then(([districts, schools]) => {
+      render(schools, districts);
     });
-  d3.csv('./data/2018/gradeLevelData.csv', function (school) {
-    var gradeBands = [];
-
-    if (school['Stage El'] === '1')
-      gradeBands.push('Elementary');
-    if (school['Stage Mi'] === '1')
-      gradeBands.push('Middle');
-    if (school['Stage Hi'] === '1')
-      gradeBands.push('High');
-
-    if (!gradeBands.length || !+school.Students)
-      return;
-
-    function normalizeDistrict(district){
-      switch (district) {
-        case 'A-H-S-T COMM SCHOOL DISTRICT':
-        case 'WALNUT COMM SCHOOL DISTRICT':
-          return 'AHSTW COMM SCHOOL DISTRICT';
-        case 'COLO-NESCO SCHOOL COMM SCHOOL DISTRICT':
-          return 'COLO-NESCO COMM SCHOOL DISTRICT';
-        case 'EDDYVILLE-BLAKESBURG- FREMONT CSD':
-          return 'EDDYVILLE-BLAKESBURG-FREMONT CSD';
-        case 'ELK HORN-KIMBALLTON COMM SCHOOL DISTRICT':
-        case 'EXIRA-ELK HORN-KIMBALLTON COMM SCHOOL DISTRICT':
-          return 'EXIRA-ELK HORN-KIMBALLTON COMM SCH DIST';
-        case 'GARNER-HAYFIELD COMM SCHOOL DISTRICT':
-        case 'VENTURA COMM SCHOOL DISTRICT':
-          return 'GARNER-HAYFIELD-VENTURA COMM SCHOOL DISTRICT';
-        case 'SOUTH TAMA COUNTY COMM SCHOOL DISTRICT':
-          return 'SOUTH TAMA COUNTY';
-        default:
-          return district;
-      }
-    }
-
-    return {
-      district: normalizeDistrict(school['School District Name']),
-      school: school['School Name'],
-      population: +school.Students,
-      gradeBands: gradeBands,
-      csResponse: school['Teaches CS?'] || 'Unknown',
-    };
-  }).then(function (schools) {
-    schoolData = schools;
-    if (districtShapes) render(schoolData, districtShapes);
-  });
+  }
 
   var good = '#00aeef'; // NewBoCo Blue
   var bad = d3.hsl(good);
@@ -249,6 +246,8 @@ var districtShapes;
 
     dc.renderAll();
   }
+
+  page('/', () => load());
 
   page({
     hashbang: true
