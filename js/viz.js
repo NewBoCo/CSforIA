@@ -14,10 +14,14 @@ var groups;
   d3.json('./data/common/counties.simple2.topo.json')
     .then(init);
 
-  function load() {
+  function load(year) {
+    if (!year) {
+      year = 2018;
+    }
+
     return Promise.all([
-      d3.json('./data/2018/districts.simple2.topo.json'),
-      d3.csv('./data/2018/gradeLevelData.csv', function (school) {
+      d3.json(`./data/${year}/districts.simple2.topo.json`),
+      d3.csv(`./data/${year}/gradeLevelData.csv`, function (school) {
         var gradeBands = [];
 
         if (school['Stage El'] === '1')
@@ -53,6 +57,7 @@ var groups;
         }
 
         return {
+          year: year,
           district: normalizeDistrict(school['School District Name']),
           school: school['School Name'],
           population: +school.Students,
@@ -61,7 +66,10 @@ var groups;
         };
       }),
     ]).then(([districts, schools]) => {
-      render(schools, districts);
+      render(year, schools, districts);
+    }).catch(err => {
+      console.warn(err);
+      alert(`Error loading data for ${year}`);
     });
   }
 
@@ -80,21 +88,27 @@ var groups;
   }
 
   var ndx = crossfilter();
+  var loadedYears = [];
 
-  function render(schools, districts) {
-    var geojson = topojson.feature(districts, districts.objects.IowaSchoolDistrictsFY18);
+  function render(year, schools, districts) {
+    var geojson = topojson.feature(districts, Object.values(districts.objects)[0]);
     charts.map
       .overlayGeoJson(geojson.features, 'Districts', function (d) {
         return d.properties.COUNTY || d.properties.DistrictNa.replace(/([ -]) +/g, '$1').toUpperCase();
       });
 
-    ndx.add(schools);
+    if (!loadedYears.includes(year)){
+      ndx.add(schools);
+      loadedYears.push(year);
+    }
 
+    dims.years.filter(year);
     dc.renderAll();
   }
 
   function init(counties) {
     dims = {
+      years: ndx.dimension(dc.pluck('year')),
       districtMap: ndx.dimension(dc.pluck('district')),
       district: ndx.dimension(dc.pluck('district')),
       school: ndx.dimension(dc.pluck('school')),
@@ -248,6 +262,11 @@ var groups;
   }
 
   page('/', () => load());
+
+  page('/:year', function(ctx) {
+    const { year } = ctx.params;
+    load(parseInt(year));
+  });
 
   page({
     hashbang: true
