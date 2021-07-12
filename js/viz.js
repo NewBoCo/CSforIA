@@ -1,11 +1,9 @@
-/* globals d3, crossfilter, dc, topojson */
+/* globals page, d3, crossfilter, dc, topojson */
 
 var dims;
 var groups;
-var schoolData;
-var districtShapes;
 
-(function(d3, crossfilter, dc, topojson) {
+(function(page, d3, crossfilter, dc, topojson) {
   var charts = {
     gradeBands: dc.rowChart('#gradeBands'),
     csResponses: dc.pieChart('#csResponses'),
@@ -13,57 +11,67 @@ var districtShapes;
     table: dc.dataTable('#districts')
   };
 
-  d3.json('./data/2018/districts.simple2.topo.json')
-    .then(function (shapes) {
-      districtShapes = shapes;
-      if (schoolData) render(schoolData, districtShapes);
-    });
-  d3.csv('./data/2018/gradeLevelData.csv', function (school) {
-    var gradeBands = [];
+  d3.json('./data/common/counties.simple2.topo.json')
+    .then(init);
 
-    if (school['Stage El'] === '1')
-      gradeBands.push('Elementary');
-    if (school['Stage Mi'] === '1')
-      gradeBands.push('Middle');
-    if (school['Stage Hi'] === '1')
-      gradeBands.push('High');
-
-    if (!gradeBands.length || !+school.Students)
-      return;
-
-    function normalizeDistrict(district){
-      switch (district) {
-        case 'A-H-S-T COMM SCHOOL DISTRICT':
-        case 'WALNUT COMM SCHOOL DISTRICT':
-          return 'AHSTW COMM SCHOOL DISTRICT';
-        case 'COLO-NESCO SCHOOL COMM SCHOOL DISTRICT':
-          return 'COLO-NESCO COMM SCHOOL DISTRICT';
-        case 'EDDYVILLE-BLAKESBURG- FREMONT CSD':
-          return 'EDDYVILLE-BLAKESBURG-FREMONT CSD';
-        case 'ELK HORN-KIMBALLTON COMM SCHOOL DISTRICT':
-        case 'EXIRA-ELK HORN-KIMBALLTON COMM SCHOOL DISTRICT':
-          return 'EXIRA-ELK HORN-KIMBALLTON COMM SCH DIST';
-        case 'GARNER-HAYFIELD COMM SCHOOL DISTRICT':
-        case 'VENTURA COMM SCHOOL DISTRICT':
-          return 'GARNER-HAYFIELD-VENTURA COMM SCHOOL DISTRICT';
-        case 'SOUTH TAMA COUNTY COMM SCHOOL DISTRICT':
-          return 'SOUTH TAMA COUNTY';
-        default:
-          return district;
-      }
+  function load(year) {
+    if (!year) {
+      year = 2018;
     }
 
-    return {
-      district: normalizeDistrict(school['School District Name']),
-      school: school['School Name'],
-      population: +school.Students,
-      gradeBands: gradeBands,
-      csResponse: school['Teaches CS?'] || 'Unknown',
-    };
-  }).then(function (schools) {
-    schoolData = schools;
-    if (districtShapes) render(schoolData, districtShapes);
-  });
+    return Promise.all([
+      d3.json(`./data/${year}/districts.simple2.topo.json`),
+      d3.csv(`./data/${year}/gradeLevelData.csv`, function (school) {
+        var gradeBands = [];
+
+        if (school['Stage El'] === '1')
+          gradeBands.push('Elementary');
+        if (school['Stage Mi'] === '1')
+          gradeBands.push('Middle');
+        if (school['Stage Hi'] === '1')
+          gradeBands.push('High');
+
+        if (!gradeBands.length || !+school.Students)
+          return;
+
+        function normalizeDistrict(district){
+          switch (district) {
+            case 'A-H-S-T COMM SCHOOL DISTRICT':
+            case 'WALNUT COMM SCHOOL DISTRICT':
+              return 'AHSTW COMM SCHOOL DISTRICT';
+            case 'COLO-NESCO SCHOOL COMM SCHOOL DISTRICT':
+              return 'COLO-NESCO COMM SCHOOL DISTRICT';
+            case 'EDDYVILLE-BLAKESBURG- FREMONT CSD':
+              return 'EDDYVILLE-BLAKESBURG-FREMONT CSD';
+            case 'ELK HORN-KIMBALLTON COMM SCHOOL DISTRICT':
+            case 'EXIRA-ELK HORN-KIMBALLTON COMM SCHOOL DISTRICT':
+              return 'EXIRA-ELK HORN-KIMBALLTON COMM SCH DIST';
+            case 'GARNER-HAYFIELD COMM SCHOOL DISTRICT':
+            case 'VENTURA COMM SCHOOL DISTRICT':
+              return 'GARNER-HAYFIELD-VENTURA COMM SCHOOL DISTRICT';
+            case 'SOUTH TAMA COUNTY COMM SCHOOL DISTRICT':
+              return 'SOUTH TAMA COUNTY';
+            default:
+              return district;
+          }
+        }
+
+        return {
+          year: year,
+          district: normalizeDistrict(school['School District Name']),
+          school: school['School Name'],
+          population: +school.Students,
+          gradeBands: gradeBands,
+          csResponse: school['Teaches CS?'] || 'Unknown',
+        };
+      }),
+    ]).then(([districts, schools]) => {
+      render(year, schools, districts);
+    }).catch(err => {
+      console.warn(err);
+      alert(`Error loading data for ${year}`);
+    });
+  }
 
   var good = '#00aeef'; // NewBoCo Blue
   var bad = d3.hsl(good);
@@ -79,9 +87,28 @@ var districtShapes;
     return res;
   }
 
-  function render(schools, districts) {
-    var ndx = crossfilter(schools);
+  var ndx = crossfilter();
+  var loadedYears = [];
+
+  function render(year, schools, districts) {
+    var geojson = topojson.feature(districts, Object.values(districts.objects)[0]);
+    charts.map
+      .overlayGeoJson(geojson.features, 'Districts', function (d) {
+        return d.properties.COUNTY || d.properties.DistrictNa.replace(/([ -]) +/g, '$1').toUpperCase();
+      });
+
+    if (!loadedYears.includes(year)){
+      ndx.add(schools);
+      loadedYears.push(year);
+    }
+
+    dims.years.filter(year);
+    dc.renderAll();
+  }
+
+  function init(counties) {
     dims = {
+      years: ndx.dimension(dc.pluck('year')),
       districtMap: ndx.dimension(dc.pluck('district')),
       district: ndx.dimension(dc.pluck('district')),
       school: ndx.dimension(dc.pluck('school')),
@@ -159,7 +186,7 @@ var districtShapes;
       .externalRadiusPadding(10)
     ;
 
-    var geojson = topojson.feature(districts, districts.objects.IowaSchoolDistrictsFY18);
+    var geojson = topojson.feature(counties, counties.objects.county);
     var projection = d3.geoAlbersUsa()
       .fitSize([990,500], geojson);
 
@@ -168,10 +195,10 @@ var districtShapes;
       .dimension(dims.districtMap)
       .group(groups.districtMap)
       .colorCalculator(function (d) {
-        return d ? districtColor(d.count, d.responses, d.cs) : '#ccc';
+        return d ? districtColor(d.count, d.responses, d.cs) : '#fff';
       })
-      .overlayGeoJson(geojson.features, 'SchoolName', function (d) {
-        return d.properties.SchoolName.replace(/([ -]) +/g, '$1').toUpperCase();
+      .overlayGeoJson(geojson.features, 'Counties', function (d) {
+        return d.properties.COUNTY;
       })
       .projection(projection)
       .valueAccessor(function(kv) {
@@ -233,4 +260,15 @@ var districtShapes;
 
     dc.renderAll();
   }
-})(d3, crossfilter, dc, topojson);
+
+  page('/', () => load());
+
+  page('/:year', function(ctx) {
+    const { year } = ctx.params;
+    load(parseInt(year));
+  });
+
+  page({
+    hashbang: true
+  });
+})(page, d3, crossfilter, dc, topojson);
